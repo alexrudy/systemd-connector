@@ -144,6 +144,12 @@ impl SystemDSocket {
     }
 }
 
+impl IntoRawFd for SystemDSocket {
+    fn into_raw_fd(self) -> RawFd {
+        self.fd
+    }
+}
+
 impl AsRawFd for SystemDSocket {
     fn as_raw_fd(&self) -> RawFd {
         self.fd
@@ -152,7 +158,15 @@ impl AsRawFd for SystemDSocket {
 
 impl AsFd for SystemDSocket {
     fn as_fd(&self) -> BorrowedFd<'_> {
+        // Safety: SystemDSocket file descriptors are always open.
         unsafe { BorrowedFd::borrow_raw(self.fd) }
+    }
+}
+
+impl From<SystemDSocket> for OwnedFd {
+    fn from(value: SystemDSocket) -> Self {
+        // Safety: SystemDSocket file descriptors are always open.
+        unsafe { OwnedFd::from_raw_fd(value.into_raw_fd()) }
     }
 }
 
