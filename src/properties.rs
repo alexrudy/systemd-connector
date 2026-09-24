@@ -1,6 +1,6 @@
 //! Access properties of systemd units via systemctl
 
-use std::{collections::HashMap, io, str::FromStr};
+use std::{collections::HashMap, io, process::Output, str::FromStr};
 
 use thiserror::Error;
 
@@ -12,7 +12,11 @@ pub fn properties(unit: &str) -> Result<SystemDProperties, PropertyParseError> {
 
     let output = cmd.output()?;
 
-    String::from_utf8(output.stdout).unwrap().parse()
+    if output.status.success() {
+        String::from_utf8(output.stdout).unwrap().parse()
+    } else {
+        Err(PropertyParseError::SystemctlError(output))
+    }
 }
 
 /// The active state of a systemd unit
@@ -69,26 +73,25 @@ pub enum PropertyParseError {
     #[error("Line {0} is missing the delimiter '='")]
     MissingDelimeter(String),
 
-    /// An expected property is missing
-    #[error("Missing property {0}")]
-    MissingProperty(&'static str),
-
     /// A command error occured running systemctl
     #[error("Running systemctl: {0}")]
-    CommandError(#[from] io::Error),
+    SpawnError(#[from] io::Error),
+
+    /// systemctl returned an error
+    #[error("systemctl returned exit code {}", .0.status.code().unwrap_or(0))]
+    SystemctlError(Output),
 }
 
 /// A map of systemd properties
 #[derive(Debug, Clone)]
 pub struct SystemDProperties {
     properties: HashMap<String, String>,
-    active: ActiveState,
 }
 
 impl SystemDProperties {
     /// Get the active state of the systemd unit
-    pub fn state(&self) -> ActiveState {
-        self.active
+    pub fn state(&self) -> Option<ActiveState> {
+        self.properties.get("ActiveState")?.parse().ok()
     }
 
     /// Get a property of the systemd unit
@@ -111,11 +114,6 @@ impl FromStr for SystemDProperties {
             properties.insert(key.to_owned(), value.to_owned());
         }
 
-        let active = properties
-            .get("ActiveState")
-            .ok_or(PropertyParseError::MissingProperty("ActiveState"))?
-            .parse()?;
-
-        Ok(Self { properties, active })
+        Ok(Self { properties })
     }
 }
