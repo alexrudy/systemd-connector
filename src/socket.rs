@@ -21,7 +21,7 @@ pub enum SocketError {
     IO(#[from] io::Error),
 
     /// The PID that systemd gave us is not our PID
-    #[error("PID={0} but ${}={1}", LISTEN_PID)]
+    #[error("PID={0} but $LISTEN_PID={1}")]
     WrongPID(u32, String),
 
     /// The file descriptor that systemd gave us is not a socket
